@@ -4,7 +4,8 @@
   "description": "",
   "scripts": {
     "start": "tsc-watch --onSuccess \"node ./build/index.js\"",
-    "build": "tsc"
+    "build": "tsc",
+    "publish": "shx rm -rf dist && tsc && npm version patch && npm publish"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,9 +15,10 @@
   "author": "Sebastian Kuligowski",
   "license": "MIT",
   "devDependencies": {
+    "@types/node": "^16.13.2",
     "nodemon": "^3.0.1",
+    "shx": "^0.3.4",
     "tsc-watch": "^6.0.4",
-    "typescript": "^5.2.2",
-    "@types/node": "^16.13.2"
+    "typescript": "^5.2.2"
   }
 }
