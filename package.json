@@ -5,7 +5,7 @@
   "scripts": {
     "start": "tsc-watch --onSuccess \"node ./build/index.js\"",
     "build": "tsc",
-    "publish": "shx rm -rf dist && tsc && npm version patch && npm publish"
+    "release": "shx rm -rf dist && tsc && npm version patch && npm publish"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
