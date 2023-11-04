@@ -1,0 +1,22 @@
+{
+  "name": "worker-threads-queue",
+  "version": "0.0.1",
+  "description": "",
+  "scripts": {
+    "start": "tsc-watch --onSuccess \"node ./build/index.js\"",
+    "build": "tsc"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "author": "Sebastian Kuligowski",
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "tsc-watch": "^6.0.4",
+    "typescript": "^5.2.2",
+    "@types/node": "^16.13.2"
+  }
+}
