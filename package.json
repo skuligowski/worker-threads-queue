@@ -3,14 +3,14 @@
   "version": "0.0.6",
   "description": "",
   "scripts": {
-    "start": "tsc-watch --onSuccess \"node ./build/index.js\"",
-    "build": "tsc",
+    "start": "tsc-watch --onSuccess \"node ./dist/tests/simple_queue.js\"",
+    "build": "shx rm -rf dist && tsc",
     "release": "shx rm -rf dist && tsc && npm version patch && npm publish"
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/lib/index.js",
+  "types": "dist/lib/index.d.ts",
   "files": [
-    "/dist"
+    "/dist/lib"
   ],
   "author": "Sebastian Kuligowski",
   "license": "MIT",
