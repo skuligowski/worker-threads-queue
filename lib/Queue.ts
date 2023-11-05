@@ -1,10 +1,12 @@
 import path from "path";
 import { Worker } from "worker_threads";
+import { PriorityQueue } from "./PriorityQueue";
 import nextId from './TaskId';
 
 export interface Task<P> {
     id: string;
     name: string;
+    priority: number;
     payload: P;
 }
 
@@ -18,6 +20,10 @@ interface PromiseControl<R> {
     reject: (value: any) => void;
 }
 
+export interface TaskOptions {
+  priority?: number;
+  retryCount?: number;
+}
 
 export interface WorkerResponse<R> {
     payload?: R;
@@ -28,10 +34,14 @@ class Queue {
   name: string;
   numThreads: number;
   
-  tasksQueue: TaskInstance<any, any>[] = [];
+  tasksQueue: PriorityQueue<TaskInstance<any, any>> 
+    = new PriorityQueue((instance: TaskInstance<any, any>) => instance.task.priority);
+  dlQueue: Task<any>[] = [];
   workersPool: {[threadId: number]: Worker } = {};
   freeWorkers: number[] = [];
   jobs: {[threadId: number]: TaskInstance<any, any>} = {};
+
+  setTimeoutCancel: any;
 
   constructor(name: string, numThreads: number) {
     console.log(`[${name}] queue created; [${numThreads}] threads.`);
@@ -42,19 +52,20 @@ class Queue {
     }
   }
 
-  add<P, R>(name: string, payload: P): Promise<R> {
+  add<P, R>(name: string, payload: P, options?: TaskOptions): Promise<R> {
     const id = nextId(this.name);
     console.log(`[${id}] Queueing task: ${name}`);
-    return new Promise((resolve, reject)=>{
-        this.tasksQueue.push({task: {id, name, payload}, promise: {resolve, reject}});
+    return new Promise<R>((resolve, reject)=>{
+        this.tasksQueue.enqueue({task: {id, name, payload, priority: options?.priority || 100}, promise: {resolve, reject}});
         this.trySchedule();
-    }); 
+    });
   }
 
   status(): any {
     console.log(this.jobs);
     console.log(this.tasksQueue);
     console.log(this.freeWorkers);
+    console.log(this.dlQueue);
   }
 
   private createWorker() {
@@ -77,6 +88,7 @@ class Queue {
     const taskInstance = this.jobs[threadId];
     if (reponse.error) {
       console.log(`[${taskInstance.task.id}] Task error: ${taskInstance.task.name}, releasing worker [${threadId}]`);
+      this.dlQueue.push(taskInstance.task);
       taskInstance.promise.reject(reponse.error);
     } else {
       console.log(`[${taskInstance.task.id}] Task completed: ${taskInstance.task.name}, releasing worker [${threadId}]`);
@@ -86,8 +98,8 @@ class Queue {
   }
 
   private trySchedule() {
-    if (this.freeWorkers.length > 0 && this.tasksQueue.length > 0) {
-      const taskInstance = this.tasksQueue.shift();
+    if (this.freeWorkers.length > 0 && this.tasksQueue.size() > 0) {
+      const taskInstance = this.tasksQueue.dequeue();
       const workerId = this.freeWorkers.shift();
       if (workerId && taskInstance) {
         this.jobs[workerId] = taskInstance;
