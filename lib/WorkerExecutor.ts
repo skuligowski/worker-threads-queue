@@ -6,10 +6,7 @@ type AsyncFunc<P, R> = (payload: P) => Promise<R>;
 async function execute<P, R>(task: Task<P>): Promise<R> {
   const run = await load<P, R>(task);
   const startTime = new Date().getTime();
-  return run(task.payload)
-    .finally(() => {
-
-    });
+  return run(task.payload);
 }
 
 async function load<P, R>(task: Task<P>): Promise<AsyncFunc<P, R>>  {
