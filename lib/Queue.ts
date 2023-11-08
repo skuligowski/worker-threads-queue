@@ -1,23 +1,25 @@
+import EventEmitter from "events";
 import path from "path";
 import { Worker } from "worker_threads";
+import { PersistenceStore } from "./PersistenceStore";
 import { PriorityQueue } from "./PriorityQueue";
-import nextId from './TaskId';
+import nextId from "./TaskId";
 
 export interface Task<P> {
-    id: string;
-    name: string;
-    priority: number;
-    payload: P;
+  id: string;
+  name: string;
+  priority: number;
+  payload: P;
 }
 
 interface TaskInstance<P, R> {
-    task: Task<P>;
-    promise: PromiseControl<R>;
+  task: Task<P>;
 }
 
-interface PromiseControl<R> {
-    resolve: (value: R) => void;
-    reject: (value: any) => void;
+export interface PersistenceAdapter<P> {
+  onAppend(task: Task<P>): Promise<void>;
+  onDelete(task: Task<P>): Promise<void>;
+  getAll(): Promise<Task<P>[]>;
 }
 
 export interface TaskOptions {
@@ -26,38 +28,72 @@ export interface TaskOptions {
 }
 
 export interface WorkerResponse<R> {
-    payload?: R;
-    error?: any;
+  payload?: R;
+  error?: any;
 }
 
 class Queue {
   name: string;
   numThreads: number;
-  
-  tasksQueue: PriorityQueue<TaskInstance<any, any>> 
-    = new PriorityQueue((instance: TaskInstance<any, any>) => instance.task.priority);
+
+  tasksQueue: PriorityQueue<TaskInstance<any, any>> = new PriorityQueue(
+    (instance: TaskInstance<any, any>) => instance.task.priority
+  );
+  whenReady: Promise<boolean>;
   dlQueue: Task<any>[] = [];
-  workersPool: {[threadId: number]: Worker } = {};
+  workersPool: { [threadId: number]: Worker } = {};
   freeWorkers: number[] = [];
-  jobs: {[threadId: number]: TaskInstance<any, any>} = {};
+  jobs: { [threadId: number]: TaskInstance<any, any> } = {};
+  persistenceStore: PersistenceStore<any>;
 
-  setTimeoutCancel: any;
+  events: EventEmitter = new EventEmitter();
 
-  constructor(name: string, numThreads: number) {
+  constructor(
+    name: string,
+    numThreads: number,
+    persistenceAdapter?: PersistenceAdapter<any>
+  ) {
     console.log(`[${name}] queue created; [${numThreads}] threads.`);
     this.name = name;
     this.numThreads = numThreads;
-    for (var i = 0; i < numThreads; i++) {
-      const worker = this.createWorker();
-    }
+    this.persistenceStore = new PersistenceStore(persistenceAdapter);
+    this.whenReady = new Promise((resolve) => {
+      this.persistenceStore.getAll()
+      .then(tasks => { 
+        if (tasks.length) {
+          console.log(`[${name}}] Restoring tasks: ${tasks.length}`);
+          tasks.forEach(task => this.tasksQueue.enqueue({ task }));
+          process.nextTick(() => this.trySchedule());
+        }
+      })
+      .catch(e => Promise.resolve())
+      .finally(() => {
+        for (var i = 0; i < numThreads; i++) {
+          const worker = this.createWorker();
+        }
+        resolve(true);
+      })
+    });
+
   }
 
-  add<P, R>(name: string, payload: P, options?: TaskOptions): Promise<R> {
-    const id = nextId(this.name);
-    console.log(`[${id}] Queueing task: ${name}`);
-    return new Promise<R>((resolve, reject)=>{
-        this.tasksQueue.enqueue({task: {id, name, payload, priority: options?.priority || 100}, promise: {resolve, reject}});
-        this.trySchedule();
+  add<P>(name: string, payload: P, options?: TaskOptions): void {
+    this.whenReady.then(() => {
+      const id = nextId(this.name);
+      console.log(`[${id}] Queueing task: ${name}`);
+      const task = { id, name, payload, priority: options?.priority || 100 };
+      this.persistenceStore.onAppend(task)
+        .catch(e => Promise.resolve())
+        .finally(() => {
+          this.tasksQueue.enqueue({ task });
+          this.trySchedule();
+        });  
+    });
+  }
+
+  on<R>(taskName: string, callback: (error: any, result: R) => void) {
+    this.events.on(taskName, (error: any, response: R) => {
+      callback(error, response);
     });
   }
 
@@ -69,14 +105,14 @@ class Queue {
   }
 
   private createWorker() {
-    const worker = new Worker(path.join(__dirname, 'WorkerExecutor.js'));
+    const worker = new Worker(path.join(__dirname, "WorkerExecutor.js"));
     worker.on("message", <R>(message: WorkerResponse<R>) => {
       this.freeWorkers.push(worker.threadId);
-      this.runTaskPromise(worker.threadId, message);
+      this.handleResponse(worker.threadId, message);
       this.trySchedule();
     });
     worker.on("error", (e) => {
-      this.runTaskPromise(worker.threadId, {error: e});
+      this.handleResponse(worker.threadId, { error: e });
       delete this.workersPool[worker.threadId];
       this.trySchedule();
     });
@@ -84,15 +120,23 @@ class Queue {
     this.freeWorkers.push(worker.threadId);
   }
 
-  private runTaskPromise<R>(threadId: number, reponse: WorkerResponse<R>) {
+  private handleResponse<R>(threadId: number, response: WorkerResponse<R>) {
     const taskInstance = this.jobs[threadId];
-    if (reponse.error) {
-      console.log(`[${taskInstance.task.id}] Task error: ${taskInstance.task.name}, releasing worker [${threadId}]`);
+    if (response.error) {
+      console.log(
+        `[${taskInstance.task.id}] Task error: ${taskInstance.task.name}, releasing worker [${threadId}]`
+      );
       this.dlQueue.push(taskInstance.task);
-      taskInstance.promise.reject(reponse.error);
+      this.persistenceStore.onDelete(taskInstance.task)
+        .catch(e => Promise.resolve())
+        .finally(() => this.events.emit(taskInstance.task.name, response.error));
     } else {
-      console.log(`[${taskInstance.task.id}] Task completed: ${taskInstance.task.name}, releasing worker [${threadId}]`);
-      taskInstance.promise.resolve(reponse.payload);
+      console.log(
+        `[${taskInstance.task.id}] Task completed: ${taskInstance.task.name}, releasing worker [${threadId}]`
+      );
+      this.persistenceStore.onDelete(taskInstance.task)
+        .catch(e => Promise.resolve())
+        .finally(() => this.events.emit(taskInstance.task.name, null, response.payload));
     }
     delete this.jobs[threadId];
   }
@@ -104,9 +148,12 @@ class Queue {
       if (workerId && taskInstance) {
         this.jobs[workerId] = taskInstance;
         const worker = this.workersPool[workerId];
-        console.log(`[${taskInstance.task.id}] Starting task ${taskInstance.task.name} using worker [${worker.threadId}]`);
+        console.log(
+          `[${taskInstance.task.id}] Starting task ${taskInstance.task.name} using worker [${worker.threadId}]`
+        );
         worker.postMessage(taskInstance.task);
       }
+      this.trySchedule();
     }
   }
 }
