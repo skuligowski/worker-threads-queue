@@ -1,6 +1,7 @@
 import { Task } from "./Queue";
+import { log } from "./logger";
 
-const { parentPort, threadId } = require("node:worker_threads");
+const { parentPort } = require("node:worker_threads");
 type AsyncFunc<P, R> = (payload: P) => Promise<R>;
 
 async function execute<P, R>(task: Task<P>): Promise<R> {
@@ -11,10 +12,10 @@ async function execute<P, R>(task: Task<P>): Promise<R> {
 
 async function load<P, R>(task: Task<P>): Promise<AsyncFunc<P, R>>  {
     try {
-        const taskModule = (await import(task.name)) as { default: AsyncFunc<P, R> };
+        const taskModule = (await import(task.script)) as { default: AsyncFunc<P, R> };
         return taskModule.default;
     } catch(e) {
-        console.log(`[${task.id}] Task ${task.name} not found, exiting...`);
+        log(`[${task.id}] Task ${task.name} not found, exiting...`);
         throw new Error(`[${task.id}] Task ${task.name} not found, exiting...`);
     }
 }

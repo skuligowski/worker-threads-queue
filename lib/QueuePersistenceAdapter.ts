@@ -2,6 +2,7 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import readline from 'readline';
 import { PersistenceAdapter, Task } from "./Queue";
+import { log } from './logger';
 
 class QueuePersistenceAdapter implements PersistenceAdapter<any> {
     
@@ -29,9 +30,9 @@ class QueuePersistenceAdapter implements PersistenceAdapter<any> {
         const tasksMap: { [key: string]: Task<any> } = {};
         const order: string[] = [];
         for await (const line of rl) {
-            const [action, id, name, priority, payload] = line.split('|').map(item => item.trim());
+            const [action, id, name, script, priority, payload] = line.split('|').map(item => item.trim());
             if (action === 'APPEND') {
-                tasksMap[id] = {id, name, priority: parseInt(priority), payload: JSON.parse(payload)};
+                tasksMap[id] = {id, name, script, priority: parseInt(priority), payload: JSON.parse(payload)};
                 order.push(id);
             }
             if (action === 'DELETE') {
@@ -43,11 +44,11 @@ class QueuePersistenceAdapter implements PersistenceAdapter<any> {
     }
 
     private toAppendLine(task: Task<any>): string {
-        return `APPEND | ${task.id} | ${task.name} | ${task.priority} | ${JSON.stringify(task.payload)}\n`;
+        return `APPEND | ${task.id} | ${task.name} | ${task.script} | ${task.priority} | ${JSON.stringify(task.payload)}\n`;
     }
 
     private async compactIndex(): Promise<void> { 
-        console.log('Compacting queue logindex...')
+        log('Compacting queue logindex...');
         const allTasks = await this.getAll();
         const lines = allTasks.map(task => this.toAppendLine(task));
         await fsp.unlink(this.fileName);

@@ -1,3 +1,4 @@
+import { log } from './logger';
 import { PersistenceAdapter, Task } from "./Queue";
 
 class PersistenceStore<T> implements PersistenceAdapter<T> {
@@ -12,7 +13,7 @@ class PersistenceStore<T> implements PersistenceAdapter<T> {
         try {
             return this.persistenceAdapter ? this.persistenceAdapter.onAppend(task) : Promise.resolve();
         } catch(e) {
-            console.error('Persistence adapter error:', e);
+            log('Persistence adapter error:', e);
             return Promise.reject(e);
         }
     }
@@ -20,7 +21,7 @@ class PersistenceStore<T> implements PersistenceAdapter<T> {
         try {
             return this.persistenceAdapter ? this.persistenceAdapter.onDelete(task) : Promise.resolve();
         } catch(e) {
-            console.error('Persistence adapter error:', e);
+            log('Persistence adapter error:', e);
             return Promise.reject(e.message);
         }
     }
@@ -28,7 +29,7 @@ class PersistenceStore<T> implements PersistenceAdapter<T> {
         try {
             return this.persistenceAdapter ? this.persistenceAdapter.getAll() : Promise.resolve([]);
         } catch(e) {
-            console.error('Persistence adapter error:', e);
+            log('Persistence adapter error:', e);
             return Promise.reject(e);
         }
     }
