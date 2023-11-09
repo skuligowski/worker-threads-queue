@@ -1,5 +1,5 @@
-import { Task } from "./Queue";
 import { log } from "./logger";
+import { Task } from "./Queue";
 
 const { parentPort } = require("node:worker_threads");
 type AsyncFunc<P, R> = (payload: P) => Promise<R>;

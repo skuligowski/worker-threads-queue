@@ -23,7 +23,7 @@ class TaskFactory {
       name,
       script: options?.script || this.taskDefinitionsMap[name]?.script || name,
       payload,
-      timeout: options?.timeout || this.taskDefinitionsMap[name]?.timeout || undefined,
+      timeout: options?.timeout || this.taskDefinitionsMap[name]?.timeout || 0,
       priority:
         options?.priority || this.taskDefinitionsMap[name]?.priority || 100,
     };

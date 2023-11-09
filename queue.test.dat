@@ -1,0 +1,8 @@
+APPEND | test.JwCY.1 | task1 | /Users/seba/Projects/worker-threads-queue/dist/tests/task1.js | 200 | 100 | {"a":300}
+APPEND | test.JwCY.2 | task1 | /Users/seba/Projects/worker-threads-queue/dist/tests/task1.js | 200 | 100 | {"a":300}
+APPEND | test.JwCY.3 | task1 | /Users/seba/Projects/worker-threads-queue/dist/tests/task1.js | 200 | 100 | {"a":300}
+APPEND | test.JwCY.4 | task1 | /Users/seba/Projects/worker-threads-queue/dist/tests/task1.js | 200 | 100 | {"a":300}
+DELETE | test.JwCY.3
+DELETE | test.JwCY.2
+DELETE | test.JwCY.1
+DELETE | test.JwCY.4
