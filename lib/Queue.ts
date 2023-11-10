@@ -45,9 +45,10 @@ export interface WorkerResponse<R> {
   error?: any;
 }
 
-export interface TaskCallback<R> {
-  taskName: string;
-  callback: (error: any, result: R) => void;
+export interface QueueOptions {
+  numThreads: number;
+  persistenceAdapter?: PersistenceAdapter<any>,
+  taskDefinitions?: TaskDefinition[],
 }
 
 class Queue {
@@ -64,57 +65,25 @@ class Queue {
 
   private events: EventEmitter = new EventEmitter();
   
-  static create(name: string) {
-      return new class QueueBuilder {
-        numThreads: number = 2;
-        persistenceAdapter: PersistenceAdapter<any>;
-        taskDefinitions: TaskDefinition[] = [];
-        taskCallbacks: TaskCallback<any>[] = [];
-        withNumThreads(numThreads: number): QueueBuilder {
-          this.numThreads = numThreads;
-          return this;
-        }
-        withPersistenceAdapter(persistenceAdapter: PersistenceAdapter<any>): QueueBuilder {
-          this.persistenceAdapter = persistenceAdapter;
-          return this;
-        }
-        addTaskDefinition(taskDefinition: TaskDefinition): QueueBuilder {
-          this.taskDefinitions.push(taskDefinition);
-          return this;
-        }
-        on<R>(taskName: string, callback: (error: any, result: R) => void): QueueBuilder {
-          this.taskCallbacks.push({taskName, callback});
-          return this;
-        }
-        start(): Queue {
-          return new Queue(name, this.numThreads, this.persistenceAdapter, this.taskDefinitions, this.taskCallbacks);
-        }
-      };
-  }
-
-  private constructor(
-    name: string,
-    numThreads: number,
-    persistenceAdapter?: PersistenceAdapter<any>,
-    taskDefinitions: TaskDefinition[] = [],
-    taskCallbacks: TaskCallback<any>[] = [],
+  constructor(
+    name: string, { numThreads, persistenceAdapter, taskDefinitions }: QueueOptions
   ) {
     log(`[${name}] queue created; [${numThreads}] threads.`);
     this.persistenceStore = new PersistenceStore(persistenceAdapter);
-    this.taskFactory = new TaskFactory(name, taskDefinitions);
-    taskCallbacks.forEach(taskCallback => this.on(taskCallback.taskName, taskCallback.callback));
+    this.taskFactory = new TaskFactory(name, taskDefinitions || []);
     this.whenReady = new Promise((resolve) => {
       this.persistenceStore
         .getAll()
         .then((tasks) => {
           if (tasks.length) {
-            log(`[${name}}] Restoring tasks: ${tasks.length}`);
+            log(`[${name}] Restoring tasks: ${tasks.length}`);
             tasks.forEach((task) => this.tasksQueue.enqueue(task));
             process.nextTick(() => this.trySchedule());
           }
         })
         .catch(() => Promise.resolve())
         .finally(() => {
+          console.log('Creating workers');
           for (var i = 0; i < numThreads; i++) {
             const worker = this.createWorker();
           }
@@ -123,9 +92,9 @@ class Queue {
     });
   }
 
-
-  add<P>(name: string, payload: P, options?: TaskOptions): void {
+  add<P>(name: string, payload: P, options?: TaskOptions): Queue {
     this.whenReady.then(() => {
+      console.log('Adding');
       const task = this.taskFactory.createTask(name, payload, options);
       this.persistenceStore
         .onAppend(task)
@@ -133,12 +102,16 @@ class Queue {
         .finally(() => {
           this.tasksQueue.enqueue(task);
           this.trySchedule();
+          console.log('Try schedule from adding');
         });
     });
+    return this;
   }
 
-  on<R>(taskName: string, callback: (error: any, result: R) => void): void {
+  on<R>(taskName: string, callback: (error: any, result: R) => void): Queue {
+    console.log('On ' + taskName);
     this.events.on(taskName, (error: any, response: R) => callback(error, response));
+    return this;
   }
 
   status(): any {
