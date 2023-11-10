@@ -64,4 +64,4 @@ class QueuePersistenceAdapter implements PersistenceAdapter<any> {
     
 }
 
-export default QueuePersistenceAdapter;
+export { QueuePersistenceAdapter };

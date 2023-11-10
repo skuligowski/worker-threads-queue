@@ -45,34 +45,64 @@ export interface WorkerResponse<R> {
   error?: any;
 }
 
-class Queue {
-  name: string;
-  numThreads: number;
+export interface TaskCallback<R> {
+  taskName: string;
+  callback: (error: any, result: R) => void;
+}
 
-  tasksQueue: PriorityQueue<Task<any>> = new PriorityQueue(
+class Queue {
+  private tasksQueue: PriorityQueue<Task<any>> = new PriorityQueue(
     (task: Task<any>) => task.priority
   );
-  whenReady: Promise<boolean>;
-  dlQueue: Task<any>[] = [];
-  workersPool: { [threadId: number]: Worker } = {};
-  freeWorkers: number[] = [];
-  jobs: { [threadId: number]: Job } = {};
-  persistenceStore: PersistenceStore<any>;
-  taskFactory: TaskFactory;
+  private whenReady: Promise<boolean>;
+  private dlQueue: Task<any>[] = [];
+  private workersPool: { [threadId: number]: Worker } = {};
+  private freeWorkers: number[] = [];
+  private jobs: { [threadId: number]: Job } = {};
+  private persistenceStore: PersistenceStore<any>;
+  private taskFactory: TaskFactory;
 
-  events: EventEmitter = new EventEmitter();
+  private events: EventEmitter = new EventEmitter();
+  
+  static create(name: string) {
+      return new class QueueBuilder {
+        numThreads: number = 2;
+        persistenceAdapter: PersistenceAdapter<any>;
+        taskDefinitions: TaskDefinition[] = [];
+        taskCallbacks: TaskCallback<any>[] = [];
+        withNumThreads(numThreads: number): QueueBuilder {
+          this.numThreads = numThreads;
+          return this;
+        }
+        withPersistenceAdapter(persistenceAdapter: PersistenceAdapter<any>): QueueBuilder {
+          this.persistenceAdapter = persistenceAdapter;
+          return this;
+        }
+        addTaskDefinition(taskDefinition: TaskDefinition): QueueBuilder {
+          this.taskDefinitions.push(taskDefinition);
+          return this;
+        }
+        on<R>(taskName: string, callback: (error: any, result: R) => void): QueueBuilder {
+          this.taskCallbacks.push({taskName, callback});
+          return this;
+        }
+        start(): Queue {
+          return new Queue(name, this.numThreads, this.persistenceAdapter, this.taskDefinitions, this.taskCallbacks);
+        }
+      };
+  }
 
-  constructor(
+  private constructor(
     name: string,
     numThreads: number,
     persistenceAdapter?: PersistenceAdapter<any>,
-    taskDefinitions: TaskDefinition[] = []
+    taskDefinitions: TaskDefinition[] = [],
+    taskCallbacks: TaskCallback<any>[] = [],
   ) {
     log(`[${name}] queue created; [${numThreads}] threads.`);
-    this.name = name;
-    this.numThreads = numThreads;
     this.persistenceStore = new PersistenceStore(persistenceAdapter);
     this.taskFactory = new TaskFactory(name, taskDefinitions);
+    taskCallbacks.forEach(taskCallback => this.on(taskCallback.taskName, taskCallback.callback));
     this.whenReady = new Promise((resolve) => {
       this.persistenceStore
         .getAll()
@@ -83,7 +113,7 @@ class Queue {
             process.nextTick(() => this.trySchedule());
           }
         })
-        .catch((e) => Promise.resolve())
+        .catch(() => Promise.resolve())
         .finally(() => {
           for (var i = 0; i < numThreads; i++) {
             const worker = this.createWorker();
@@ -92,6 +122,7 @@ class Queue {
         });
     });
   }
+
 
   add<P>(name: string, payload: P, options?: TaskOptions): void {
     this.whenReady.then(() => {
@@ -160,14 +191,14 @@ class Queue {
       this.dlQueue.push(task);
       return this.persistenceStore
         .onDelete(task)
-        .catch((e) => Promise.resolve())
+        .catch(() => Promise.resolve())
         .finally(() => this.events.emit(task.name, response.error))
     } else {
       log(`[${task.id}] Task completed: ${task.name}, releasing worker [${threadId}]`);
       return this.persistenceStore
         .onDelete(task)
-        .catch((e) => Promise.resolve())
-        .finally(() => this.events.emit(task.name, null, response.payload));
+        .catch(() => Promise.resolve())
+        .finally(() => this.events.emit(task.name, undefined, response.payload));
     }
   }
 

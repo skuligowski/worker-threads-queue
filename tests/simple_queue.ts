@@ -1,21 +1,18 @@
 import path from "path";
-import { Queue } from "../lib";
-import QueuePersistenceAdapter from "../lib/QueuePersistenceAdapter";
+import { Queue, QueuePersistenceAdapter } from "../lib";
 
-const myQueue = new Queue('test', 3, new QueuePersistenceAdapter('queue.test.dat', 60), [
-    { name: 'task1', script: path.join(__dirname, 'task1.js'), priority: 200},
-    { name: 'task2', script: path.join(__dirname, 'task1.js'), priority: 100},
-]);
+const myQueue = Queue.create('test')
+    .withNumThreads(4)
+    .withPersistenceAdapter(new QueuePersistenceAdapter('queue.test.dat', 60))
+    .addTaskDefinition({ name: 'task1', script: path.join(__dirname, 'task1.js'), priority: 200})
+    .addTaskDefinition({ name: 'task2', script: path.join(__dirname, 'task1.js'), priority: 100})
+    .on('task1', (err, result) => {
+        console.log(err, result);
+    })
+    .start();
 
-myQueue.on('task1', (err, result) => {
-    if (err) {
-        //handle error
-
-    }
-    console.log(err, result);
-});
 
 for (var i = 0; i < 4; i++) {
-    myQueue.add('task1', {a: 300}, { timeout: 100});
+    myQueue.add('task1', {a: 300});
+    myQueue.add('task2', {a: 200});
 }
-
