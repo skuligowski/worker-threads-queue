@@ -1,2 +1,3 @@
-export { Queue } from './Queue';
+export { Queue, QueueOptions } from './Queue';
 export { QueuePersistenceAdapter } from './QueuePersistenceAdapter';
+

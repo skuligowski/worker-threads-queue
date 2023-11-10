@@ -83,7 +83,6 @@ class Queue {
         })
         .catch(() => Promise.resolve())
         .finally(() => {
-          console.log('Creating workers');
           for (var i = 0; i < numThreads; i++) {
             const worker = this.createWorker();
           }
@@ -94,7 +93,6 @@ class Queue {
 
   add<P>(name: string, payload: P, options?: TaskOptions): Queue {
     this.whenReady.then(() => {
-      console.log('Adding');
       const task = this.taskFactory.createTask(name, payload, options);
       this.persistenceStore
         .onAppend(task)
@@ -102,14 +100,12 @@ class Queue {
         .finally(() => {
           this.tasksQueue.enqueue(task);
           this.trySchedule();
-          console.log('Try schedule from adding');
         });
     });
     return this;
   }
 
   on<R>(taskName: string, callback: (error: any, result: R) => void): Queue {
-    console.log('On ' + taskName);
     this.events.on(taskName, (error: any, response: R) => callback(error, response));
     return this;
   }
