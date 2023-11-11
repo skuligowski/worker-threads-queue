@@ -31,13 +31,13 @@ npm install
 
 Create a task queue with a specific name and configuration:
 
-```
+```typescript
 import { Queue, TaskOptions, QueuePersistenceAdapter } from './Queue';
 import path from 'path';
 
 const myQueue = new Queue('test', {
   numThreads: 10,
-  persistenceAdapter: new QueuePersistenceAdapter('queue.test.dat', 60),
+  persistenceAdapter: new QueuePersistenceAdapter('queue.test.index', 60),
   taskDefinitions: [
     { name: 'task1', script: path.join(__dirname, 'task1.js'), priority: 200 },
     { name: 'task2', script: path.join(__dirname, 'task2.js'), priority: 100 },
@@ -49,7 +49,7 @@ const myQueue = new Queue('test', {
 
 Add a task to the queue:
 
-```
+```typescript
 myQueue.add('task1', { a: 200 });
 ```
 
@@ -57,7 +57,7 @@ myQueue.add('task1', { a: 200 });
 
 Set up an event listener for task completion or error:
 
-```
+```typescript
 myQueue.on('task1', (error, result) => {
   if (error) {
     console.error(`Task 'task1' failed with error: ${error}`);
@@ -71,7 +71,7 @@ myQueue.on('task1', (error, result) => {
 
 Check the status of the queue:
 
-```
+```typescript
 const queueStatus = myQueue.status();
 console.log('Queue status:', queueStatus);
 ```
@@ -82,7 +82,7 @@ console.log('Queue status:', queueStatus);
 
 #### Constructor
 
-```
+```typescript
 const queue = new Queue(name: string, options: QueueOptions);
 ```
 
@@ -94,11 +94,11 @@ const queue = new Queue(name: string, options: QueueOptions);
 
 #### Methods
 
-```
+
 - `add<P>(name: string, payload: P, options?: TaskOptions): Queue`: Adds a task to the queue.
 - `on<R>(taskName: string, callback: (error: any, result: R) => void): Queue`: Sets up an event listener for task completion or error.
 - `status(): any`: Retrieves the current status of the queue.
-```
+
 
 ## License
 
